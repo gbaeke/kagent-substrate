@@ -1,0 +1,17 @@
+# kind cluster for the kagent + Agent Substrate PoC.
+# Derived from kagent's own CI config (kagent-dev/kagent scripts/kind/kind-config.yaml @ v1.0.0-alpha5).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+# name comes from $KIND_CLUSTER (scripts/env.sh), default kagent-poc
+networking:
+  apiServerAddress: "127.0.0.1"   # keep the API server local-only
+# Substrate WorkerPools project pod identities and trust bundles into the ateom sandbox.
+featureGates:
+  ClusterTrustBundle: true
+  ClusterTrustBundleProjection: true
+  PodCertificateRequest: true
+runtimeConfig:
+  "api/alpha": "false"
+  "certificates.k8s.io/v1beta1": "true"
+nodes:
+  - role: control-plane

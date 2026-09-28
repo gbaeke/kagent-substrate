@@ -1,0 +1,37 @@
+# A read-only Kubernetes assistant that runs as an Agent Substrate actor.
+# kagent 1.0: Agent = template (what it does) + harness (how/where it runs).
+apiVersion: api.kagent.dev/v1alpha3
+kind: Agent
+metadata:
+  name: k8s-helper
+  namespace: kagent
+spec:
+  template:
+    description: Read-only Kubernetes assistant running inside a gVisor actor on Agent Substrate.
+    modelConfig:
+      name: default-model-config          # Ollama qwen3:4b-instruct, created by the Helm chart
+    systemPrompt: |
+      You are a concise Kubernetes assistant. You run inside a gVisor sandbox (an
+      "actor") on Agent Substrate, orchestrated by kagent. Use your tools to look at
+      the cluster before answering. You are read-only: never try to change anything.
+    tools:
+    - mcp:
+        server:
+          kind: RemoteMCPServer
+          name: kagent-tool-server
+        tools:
+        - k8s_get_resources
+        - k8s_describe_resource
+        - k8s_get_pod_logs
+        - k8s_get_events
+        - datetime_get_current_time
+  harness:
+    kagent: {}                            # the kagent Go ADK runtime (survives snapshot/restore)
+    workload:
+      # published golang-adk:1.0.0-alpha5; substrate requires a digest, not a tag
+      image: ghcr.io/kagent-dev/kagent/golang-adk@sha256:ed668c38a5805723912497d4ea085e711cf585d440907abfff3dd27991d768cc
+    substrate:
+      workerPoolRef:
+        name: kagent-default
+      snapshotPolicy:
+        location: s3://ate-snapshots/kagent  # RustFS bucket created by the substrate chart

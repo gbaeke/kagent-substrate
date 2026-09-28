@@ -1,0 +1,6 @@
+# Downloaded CLI tools — recreated by scripts/00-tools.sh
+bin/
+# Local secrets / overrides, if you add any
+.env
+*.local.yaml
+*.log

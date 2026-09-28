@@ -1,0 +1,38 @@
+# kagent 1.0.0-alpha5 values for the local PoC (kind + Agent Substrate + in-cluster Ollama).
+providers:
+  default: ollama
+  ollama:
+    provider: Ollama
+    model: "qwen3:4b-instruct"
+    config:
+      host: http://ollama.ollama.svc.cluster.local:11434
+      options:
+        num_ctx: "16384"
+
+controller:
+  substrate:
+    enabled: true
+    ateApiEndpoint: dns:///api.ate-system.svc:443
+    atenetRouterURL: http://atenet-router.ate-system.svc:80
+  sandbox:
+    guestImage:
+      # published sandbox-guest:1.0.0-alpha5 (substrate requires digests)
+      digest: sha256:3c75a8a68343df951f22e82957083e4d73d2a0c11b605c8bef8d04f07c941c9b
+
+# Platform capacity: pre-warmed gVisor workers that host actors.
+substrateWorkerPool:
+  create: true
+  name: kagent-default
+  replicas: 2
+  workerImage: ghcr.io/kagent-dev/substrate/ateom-gvisor:v0.3.0-alpha1
+  sandboxClass: gvisor
+
+# Substrate is installed separately (scripts/02-substrate.sh), not as a subchart.
+substrate:
+  enabled: false
+
+# Keep the footprint small.
+grafana-mcp:
+  enabled: false
+kmcp:
+  enabled: false
