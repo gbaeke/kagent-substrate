@@ -6,8 +6,8 @@ running its agents as sandboxed, suspend/resume actors on
 single [kind](https://kind.sigs.k8s.io/) cluster in Docker, including the LLM
 (Ollama, CPU), so **no API keys** are needed and nothing is exposed on your host.
 
-> Pre-release software. kagent 1.0 and Substrate 0.3 are alphas that change
-> almost daily; this repo pins a known-good pair. Not for production.
+> Pre-release software. kagent 1.0 is a release candidate (Substrate 1.0.0 is
+> out); this repo pins the pair kagent itself pins. Not for production.
 
 ## Prerequisites
 
@@ -20,7 +20,7 @@ single [kind](https://kind.sigs.k8s.io/) cluster in Docker, including the LLM
 | ~25 GB free disk | Images plus the 2.5 GB model. |
 | Internet access | Pulls charts from ghcr.io, images, and the model. |
 
-`kind`, `kubectl`, `helm` and `kubectl-ate` are downloaded automatically into
+`kind`, `kubectl`, `helm`, `kubectl-ate` and the `kagent` CLI are downloaded automatically into
 `./bin` at pinned versions; nothing is installed system-wide.
 
 ## Quick start
@@ -45,18 +45,29 @@ scripts/chat.sh "List the pods in the ate-system namespace"
 
 | Version | |
 | --- | --- |
-| kagent | 1.0.0-alpha5 |
-| Agent Substrate | 0.3.0-alpha1 (the version kagent 1.0.0-alpha5 pins) |
+| kagent | 1.0.0-rc3 |
+| Agent Substrate | 1.0.0 (the version kagent 1.0.0-rc3 pins in `go/go.mod`) |
 | Kubernetes | kind v0.33.0, node v1.35.0 |
 | Model | `qwen3:4b-instruct` on in-cluster Ollama |
 
+`scripts/03-kagent.sh` runs `kagent install`, which installs all of it in one go:
+it creates Substrate's CA and JWT signing pools, a shared dev PostgreSQL, the
+controller's ingress allowlist and the required preview gates, then installs the
+Helm releases `substrate-crds`, `substrate-podcert`, `substrate-atelet`,
+`substrate`, `kagent-crds` and `kagent`.
+
 - **Substrate** (`ate-system`): API server, controller, atelet, router, egress
-  proxy, Postgres, RustFS (S3 bucket for snapshots).
-- **kagent** (`kagent`): controller (A2A gateway), UI, Postgres, MCP tool server,
-  and a WorkerPool of 2 pre-warmed gVisor worker pods.
+  proxy, RustFS (S3 bucket for snapshots).
+- **kagent** (`kagent`): controller (A2A gateway), UI, MCP tool server, the
+  PostgreSQL that kagent and Substrate share (separate schemas, certificate auth),
+  and a WorkerPool of 2 pre-warmed gVisor worker pods (`ateworker-gvisor`).
 - **Two sample agents**:
-  - `k8s-helper`: read-only Kubernetes assistant with MCP tools (inline template + harness).
-  - `haiku-poet`: shows the reusable `Harness` + `AgentTemplate` split.
+  - `k8s-helper`: read-only Kubernetes assistant with MCP tools (inline template).
+  - `haiku-poet`: uses a separate `AgentTemplate` by reference.
+
+  Both reference the shared `go-adk-substrate` Harness. Since rc1 every Agent
+  needs a `harnessRef`, and the runtime image comes from the release's built-in
+  catalog, so the manifests carry no image digests.
 
 Each conversation becomes its own Substrate actor; it is snapshotted and
 suspended after every reply and resumed (~100 ms) on the next message.
@@ -74,6 +85,30 @@ kubectl-ate --context $KCTX get egress-policy <actor-name> -a kagent -o yaml
 kubectl -n kagent scale workerpool kagent-default --replicas=3
 ```
 
+### A Claude Code agent (needs an Anthropic API key)
+
+`manifests/claude-agent.yaml` adds `claude-k8s-helper`, which runs Claude Code
+through the `claude` Harness instead of the kagent Go runtime. The key stays in a
+Secret; Substrate's egress gateway injects it, so it never enters the actor.
+
+```bash
+read -rs ANTHROPIC_API_KEY
+kubectl -n kagent create secret generic kagent-anthropic --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+kubectl apply -f manifests/claude-agent.yaml
+AGENT=claude-k8s-helper scripts/chat.sh "Which pods run in ate-system?"
+```
+
+The Claude harness gets the whole MCP tool server (it cannot select single tools
+yet), so its read-only behaviour rests on the system prompt. Full walkthrough:
+[docs/claude-code-agent.md](docs/claude-code-agent.md).
+
+### Two-subagent demo with tool approval
+
+`manifests/ops-demo.yaml` adds `ops-lead`. It delegates to a read-only cluster
+subagent and a Microsoft Learn subagent, and it may scale `demo/demo-web` only
+after you approve. `chat.sh` shows the pending call, and `scripts/approve.sh
+<taskId> [yes|no] [reason]` decides it. Walkthrough: [docs/ops-demo.md](docs/ops-demo.md).
+
 In the UI, the **Substrate** page shows worker pools, templates and live actor
 states; **Agents** lets you create agents, templates and harnesses.
 
@@ -89,11 +124,11 @@ them and reverts any actor that crashed in the meantime.
 
 ## Configuration
 
-Edit `scripts/env.sh` (versions, cluster name, worker count) and
-`cluster/kagent-values.yaml` (model provider, model, Helm values).
+Edit `scripts/env.sh` (versions, cluster name) and
+`cluster/kagent-values.yaml` (model, worker count, kagent Helm values).
 
 - **Different Ollama model**: `kubectl -n ollama exec deploy/ollama -- ollama pull <model>`,
-  set `providers.ollama.model` in `cluster/kagent-values.yaml`, re-run `scripts/04-kagent.sh`.
+  set `providers.ollama.model` in `cluster/kagent-values.yaml`, re-run `scripts/03-kagent.sh`.
   Avoid "thinking" models on CPU (plain `qwen3:4b` takes minutes per reply).
 - **Second copy side by side**: `KIND_CLUSTER=my-copy ./up.sh`, then
   `KIND_CLUSTER=my-copy UI_PORT=9080 API_PORT=9083 ./scripts/ui.sh`.
@@ -113,15 +148,17 @@ docker stop kagent-poc-control-plane   # pause; later: docker start ... && ./scr
 up.sh / down.sh                one-shot install / delete
 scripts/env.sh                 pinned versions and settings
 scripts/00-tools.sh            prerequisite check + download CLIs into bin/
-scripts/01..05-*.sh            cluster, substrate, ollama, kagent, sample agents
+scripts/01..04-*.sh            cluster, ollama, kagent install (incl. Substrate), sample agents
 scripts/chat.sh                A2A JSON-RPC client
+scripts/approve.sh             approve/reject a paused tool call (HITL)
 scripts/ui.sh                  port-forwards for UI and API
 scripts/actors.sh              kubectl-ate view of Substrate
 scripts/fanout-demo.sh         parallel-session density demo
 scripts/after-restart.sh       recovery after node restart
 cluster/kind-config.yaml       kind + Substrate feature gates
-cluster/kagent-values.yaml     kagent Helm values
-manifests/                     Ollama and the sample agents
+cluster/kagent-values.yaml     kagent Helm values (fed to `kagent install`)
+manifests/                     Ollama and the sample agents (incl. the Claude Code agent)
+docs/                          guides (Claude Code agent, two-subagent demo)
 ref/                           upstream kagent chart values, for reference
 ```
 
@@ -131,6 +168,5 @@ ref/                           upstream kagent chart values, for reference
 | --- | --- |
 | `KAGENT_SEND_NOT_ACCEPTED` on every message | `./scripts/after-restart.sh` |
 | `404 model '...' not found` in an old conversation | That conversation is pinned to an earlier agent revision whose model was removed; start a new one. |
-| kagent controller restarts a few times on first install | Postgres startup race; it settles by itself. |
 | `chat.sh` connection refused | `./scripts/ui.sh` must be running (it holds the port-forward to :8083). |
 | Replies are slow | CPU inference. Use a hosted model provider in `cluster/kagent-values.yaml`. |

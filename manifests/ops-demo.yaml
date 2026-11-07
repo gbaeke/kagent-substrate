@@ -1,0 +1,126 @@
+# Two-subagent demo: an "ops-lead" orchestrator that delegates to two Shared subagents
+# and may scale a Deployment only after a human approves the call.
+#
+#   ops-lead (Agent, kagent Go ADK harness, Claude model)
+#   ├── subAgent cluster-inspector  -> read-only Kubernetes tools (kagent-tool-server)
+#   ├── subAgent azure-docs         -> Microsoft Learn MCP (mslearn, from claude-agent.yaml)
+#   └── mcp k8s_scale               -> requireApproval: true (pauses as input-required)
+#
+# rc3 note: Shared subagents are compiled into the parent's runtime. They run in the SAME
+# actor and share ONE egress policy (the union of everything below). Subagents with their
+# own Agent/Session/actor ("Dedicated") are deferred upstream.
+#
+# Needs: the kagent-anthropic Secret, plus the anthropic ModelConfig and mslearn
+# RemoteMCPServer from manifests/claude-agent.yaml.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: demo
+---
+# Something harmless to inspect and scale.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-web
+  namespace: demo
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: demo-web}
+  template:
+    metadata:
+      labels: {app: demo-web}
+    spec:
+      containers:
+      - name: web
+        image: nginx:1.29-alpine
+        resources:
+          requests: {cpu: 10m, memory: 16Mi}
+          limits: {cpu: 100m, memory: 64Mi}
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: cluster-inspector
+  namespace: kagent
+spec:
+  description: Looks up live Kubernetes state. Read-only.
+  modelConfig:
+    name: anthropic
+  systemPrompt: |-
+    You inspect a Kubernetes cluster with read-only tools and report facts:
+    names, counts, status, recent events. Never guess; if a tool fails, say so.
+    You only handle the cluster part of a request. As soon as you have the facts,
+    state them in one or two lines and transfer back to your parent agent so it
+    can finish the request. Never answer other parts yourself.
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: kagent-tool-server
+      tools:
+      - k8s_get_resources
+      - k8s_describe_resource
+      - k8s_get_events
+      - k8s_get_pod_logs
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: AgentTemplate
+metadata:
+  name: azure-docs
+  namespace: kagent
+spec:
+  description: Answers questions from official Microsoft Learn documentation.
+  modelConfig:
+    name: anthropic
+  systemPrompt: |-
+    You answer from Microsoft Learn only, using your tools. Quote the key fact
+    and always give the source URL. You only handle the docs part of a request.
+    As soon as you have it, state it in one or two lines and transfer back to
+    your parent agent so it can finish the request. Never answer other parts yourself.
+  tools:
+  - mcp:
+      server:
+        kind: RemoteMCPServer
+        name: mslearn
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Agent
+metadata:
+  name: ops-lead
+  namespace: kagent
+spec:
+  template:
+    inline:
+      description: Orchestrator that delegates to cluster-inspector and azure-docs, and scales Deployments with approval.
+      modelConfig:
+        name: anthropic
+      systemPrompt: |-
+        You lead a small ops team and have no cluster or docs access yourself.
+        Split each request into parts and send every part to the right teammate,
+        one call per teammate, with only that teammate's part:
+        - cluster-inspector: anything about the live cluster.
+        - azure-docs: Azure or Microsoft product questions.
+        When a request has both kinds of parts, call both teammates.
+        You may scale a Deployment with k8s_scale; a human must approve each call.
+        After your teammates answer, write one short combined reply yourself.
+      tools:
+      - subAgent:
+          name: cluster-inspector
+          description: Look up live Kubernetes state (pods, deployments, events, logs). Read-only.
+          templateRef:
+            name: cluster-inspector
+      - subAgent:
+          name: azure-docs
+          description: Answer Azure and Microsoft product questions from Microsoft Learn, with URLs.
+          templateRef:
+            name: azure-docs
+      - mcp:
+          server:
+            kind: RemoteMCPServer
+            name: kagent-tool-server
+          tools:
+          - k8s_scale
+          requireApproval: true
+  harnessRef:
+    name: go-adk-substrate

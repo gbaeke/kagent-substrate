@@ -21,8 +21,9 @@ get() { # name url
 get kind        "https://github.com/kubernetes-sigs/kind/releases/download/${KIND_VERSION}/kind-${OS}-${ARCH}"
 get kubectl     "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/${OS}/${ARCH}/kubectl"
 get kubectl-ate "https://github.com/kagent-dev/substrate/releases/download/v${SUBSTRATE_VERSION}/kubectl-ate-${OS}-${ARCH}"
+get kagent      "https://github.com/kagent-dev/kagent/releases/download/v${KAGENT_VERSION}/kagent-${OS}-${ARCH}"
 helm_url="https://get.helm.sh/helm-${HELM_VERSION}-${OS}-${ARCH}.tar.gz"
 if ! [ -x helm ] || [ "$(cat .helm.version 2>/dev/null)" != "$helm_url" ]; then
   echo "downloading helm"; curl -fsSL "$helm_url" | tar xz --strip-components=1 "${OS}-${ARCH}/helm" && echo "$helm_url" > .helm.version
 fi
-./kind version; ./kubectl version --client | head -1; ./helm version --short; ./kubectl-ate --version
+./kind version; ./kubectl version --client | head -1; ./helm version --short; ./kubectl-ate --version; ./kagent version

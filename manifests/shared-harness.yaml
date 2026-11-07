@@ -1,19 +1,17 @@
 # kagent 1.0 split form: one reusable Harness (how/where to run) + AgentTemplates
-# (what to do), joined by lightweight Agents. Many agents can share one Harness.
+# (what to do), joined by lightweight Agents. Every Agent references a Harness.
 apiVersion: api.kagent.dev/v1alpha3
 kind: Harness
 metadata:
   name: go-adk-substrate
   namespace: kagent
 spec:
-  kagent: {}
-  workload:
-    image: ghcr.io/kagent-dev/kagent/golang-adk@sha256:ed668c38a5805723912497d4ea085e711cf585d440907abfff3dd27991d768cc
+  kagent: {}                      # the kagent Go ADK runtime; image comes from the release catalog
   substrate:
     workerPoolRef:
-      name: kagent-default
+      name: kagent-default        # created by the kagent chart (substrateWorkerPool)
     snapshotPolicy:
-      location: s3://ate-snapshots/kagent
+      location: gs://ate-snapshots/kagent/   # RustFS bucket from the substrate chart (S3 backend uses gs:// URIs)
 ---
 apiVersion: api.kagent.dev/v1alpha3
 kind: AgentTemplate
@@ -33,7 +31,8 @@ metadata:
   name: haiku-poet
   namespace: kagent
 spec:
-  templateRef:
-    name: haiku-poet
+  template:
+    ref:
+      name: haiku-poet
   harnessRef:
     name: go-adk-substrate

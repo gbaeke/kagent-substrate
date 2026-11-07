@@ -1,0 +1,69 @@
+# A Kubernetes assistant that runs Claude Code (the `claude` Harness) in a Substrate actor.
+# Needs an Anthropic API key in the kagent-anthropic Secret first (not stored in this repo):
+#   read -rs ANTHROPIC_API_KEY
+#   kubectl -n kagent create secret generic kagent-anthropic --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+# The key never enters the actor: Substrate's egress gateway injects it into calls to Anthropic.
+apiVersion: api.kagent.dev/v1alpha3
+kind: ModelConfig
+metadata:
+  name: anthropic
+  namespace: kagent
+spec:
+  provider: Anthropic
+  model: claude-sonnet-5-5
+  apiKeySecret: kagent-anthropic
+  apiKeySecretKey: ANTHROPIC_API_KEY
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Harness
+metadata:
+  name: claude
+  namespace: kagent
+spec:
+  claude: {}                       # Claude Code; image comes from the release catalog
+  substrate:
+    workerPoolRef:
+      name: kagent-default
+    snapshotPolicy:
+      location: gs://ate-snapshots/kagent/
+---
+# Public Microsoft Learn MCP server (no auth). Listing it on the Agent is enough for kagent
+# to add learn.microsoft.com:443 to each actor's egress allowlist.
+apiVersion: api.kagent.dev/v1alpha3
+kind: RemoteMCPServer
+metadata:
+  name: mslearn
+  namespace: kagent
+spec:
+  description: ""
+  protocol: STREAMABLE_HTTP
+  url: https://learn.microsoft.com/api/mcp
+  timeout: 5s
+  terminateOnClose: true
+---
+apiVersion: api.kagent.dev/v1alpha3
+kind: Agent
+metadata:
+  name: claude-k8s-helper
+  namespace: kagent
+spec:
+  template:
+    inline:
+      description: Kubernetes assistant running Claude Code in a Substrate actor.
+      modelConfig:
+        name: anthropic
+      systemPrompt: |-
+        You are a concise Kubernetes assistant. Use your tools to look at the
+        cluster before answering. You are read-only: never change anything.
+      # The Claude harness cannot select individual MCP tools yet: it gets the whole server.
+      tools:
+      - mcp:
+          server:
+            kind: RemoteMCPServer
+            name: kagent-tool-server
+      - mcp:
+          server:
+            kind: RemoteMCPServer
+            name: mslearn
+  harnessRef:
+    name: claude
