@@ -112,6 +112,12 @@ after you approve. `chat.sh` shows the pending call, and `scripts/approve.sh
 In the UI, the **Substrate** page shows worker pools, templates and live actor
 states; **Agents** lets you create agents, templates and harnesses.
 
+### Running your own agent on Substrate
+
+[docs/langgraph-on-substrate.md](docs/langgraph-on-substrate.md) runs a LangGraph agent
+directly on Substrate, without kagent, in a separate kind cluster built from a
+Substrate checkout. It lists the errors we hit and their fixes.
+
 ## After a reboot or Docker restart
 
 ```bash
@@ -158,7 +164,7 @@ scripts/after-restart.sh       recovery after node restart
 cluster/kind-config.yaml       kind + Substrate feature gates
 cluster/kagent-values.yaml     kagent Helm values (fed to `kagent install`)
 manifests/                     Ollama and the sample agents (incl. the Claude Code agent)
-docs/                          guides (Claude Code agent, two-subagent demo)
+docs/                          guides (Claude Code agent, two-subagent demo, LangGraph on Substrate)
 ref/                           upstream kagent chart values, for reference
 ```
 
