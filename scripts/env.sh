@@ -4,9 +4,12 @@ export PATH="$POC_DIR/bin:$PATH"
 export KIND_CLUSTER=${KIND_CLUSTER:-kagent-poc}   # override to run a second copy side by side
 export KCTX=kind-$KIND_CLUSTER
 export KIND_NODE_IMAGE=kindest/node:v1.35.0
-# Matched pair: kagent v1.0.0-rc3 pins substrate v1.0.0 in go/go.mod (CI reads it from there).
+# Matched pair: kagent v1.0.0 pins substrate v1.0.0 in go/go.mod (CI reads it from there).
 export SUBSTRATE_VERSION=1.0.0
-export KAGENT_VERSION=1.0.0-rc3
+export KAGENT_VERSION=1.0.0
+# Dev PostgreSQL installed by `kagent install`: kagent's default image plus pgvector, built
+# locally from cluster/postgres-pgvector and loaded into kind by scripts/03-kagent.sh.
+export POSTGRES_IMAGE=kagent-poc/postgres-pgvector:18
 # Pinned CLI tools (downloaded into bin/ by scripts/00-tools.sh)
 export KIND_VERSION=v0.33.0
 export KUBECTL_VERSION=v1.35.9   # within skew of the 1.35 node

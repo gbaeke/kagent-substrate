@@ -6,8 +6,8 @@ running its agents as sandboxed, suspend/resume actors on
 single [kind](https://kind.sigs.k8s.io/) cluster in Docker, including the LLM
 (Ollama, CPU), so **no API keys** are needed and nothing is exposed on your host.
 
-> Pre-release software. kagent 1.0 is a release candidate (Substrate 1.0.0 is
-> out); this repo pins the pair kagent itself pins. Not for production.
+> A local playground, not a production setup. kagent 1.0.0 and Substrate 1.0.0
+> are both released; this repo pins the pair kagent itself pins.
 
 ## Prerequisites
 
@@ -15,6 +15,7 @@ single [kind](https://kind.sigs.k8s.io/) cluster in Docker, including the LLM
 | --- | --- |
 | Linux x86_64 or arm64 | Tested on Linux x86_64. macOS/Docker Desktop is untested (gVisor snapshotting is reported to be flaky there). |
 | Docker, running | Your user must be able to run `docker` without sudo. |
+| `uv` | Only for the mini dotties UI (`scripts/dotties.sh`). |
 | `curl`, `jq`, `openssl`, `tar` | Checked by `scripts/00-tools.sh`. |
 | ~8 GB free RAM, 4+ cores | The cluster idles at about 7 GB. More cores = faster CPU inference. |
 | ~25 GB free disk | Images plus the 2.5 GB model. |
@@ -45,8 +46,8 @@ scripts/chat.sh "List the pods in the ate-system namespace"
 
 | Version | |
 | --- | --- |
-| kagent | 1.0.0-rc3 |
-| Agent Substrate | 1.0.0 (the version kagent 1.0.0-rc3 pins in `go/go.mod`) |
+| kagent | 1.0.0 |
+| Agent Substrate | 1.0.0 (the version kagent 1.0.0 pins in `go/go.mod`) |
 | Kubernetes | kind v0.33.0, node v1.35.0 |
 | Model | `qwen3:4b-instruct` on in-cluster Ollama |
 
@@ -59,7 +60,8 @@ Helm releases `substrate-crds`, `substrate-podcert`, `substrate-atelet`,
 - **Substrate** (`ate-system`): API server, controller, atelet, router, egress
   proxy, RustFS (S3 bucket for snapshots).
 - **kagent** (`kagent`): controller (A2A gateway), UI, MCP tool server, the
-  PostgreSQL that kagent and Substrate share (separate schemas, certificate auth),
+  PostgreSQL that kagent and Substrate share (separate schemas, certificate auth;
+  built locally with pgvector from `cluster/postgres-pgvector`, for agent memory),
   and a WorkerPool of 2 pre-warmed gVisor worker pods (`ateworker-gvisor`).
 - **Two sample agents**:
   - `k8s-helper`: read-only Kubernetes assistant with MCP tools (inline template).
@@ -112,6 +114,14 @@ after you approve. `chat.sh` shows the pending call, and `scripts/approve.sh
 In the UI, the **Substrate** page shows worker pools, templates and live actor
 states; **Agents** lets you create agents, templates and harnesses.
 
+### Mini dotties: personal agents with their own UI
+
+`scripts/dotties.sh` runs a small web page (http://localhost:8300) for *dotties*:
+persistent personal agents that sleep until you write to them. Each one is a kagent
+`Agent` with long-term memory, a shell in its own sandbox, an egress allowlist, optional
+approvals, and the ability to write to other dotties through kagent's MCP gateway. The
+page stores nothing itself. Guide: [docs/mini-dotties.md](docs/mini-dotties.md).
+
 ### Running your own agent on Substrate
 
 [docs/langgraph-on-substrate.md](docs/langgraph-on-substrate.md) runs a LangGraph agent
@@ -161,10 +171,14 @@ scripts/ui.sh                  port-forwards for UI and API
 scripts/actors.sh              kubectl-ate view of Substrate
 scripts/fanout-demo.sh         parallel-session density demo
 scripts/after-restart.sh       recovery after node restart
+scripts/ollama-model.sh        load a model into the in-cluster Ollama through the host
+scripts/dotties.sh             mini dotties: applies dotties/manifests and runs the UI
 cluster/kind-config.yaml       kind + Substrate feature gates
 cluster/kagent-values.yaml     kagent Helm values (fed to `kagent install`)
+cluster/postgres-pgvector/     dev PostgreSQL image with pgvector (kagent memory)
 manifests/                     Ollama and the sample agents (incl. the Claude Code agent)
-docs/                          guides (Claude Code agent, two-subagent demo, LangGraph on Substrate)
+dotties/                       mini dotties: manifests and the UI (FastAPI + plain JavaScript)
+docs/                          guides (Claude Code agent, two-subagent demo, mini dotties, LangGraph on Substrate)
 ref/                           upstream kagent chart values, for reference
 ```
 
@@ -176,3 +190,7 @@ ref/                           upstream kagent chart values, for reference
 | `404 model '...' not found` in an old conversation | That conversation is pinned to an earlier agent revision whose model was removed; start a new one. |
 | `chat.sh` connection refused | `./scripts/ui.sh` must be running (it holds the port-forward to :8083). |
 | Replies are slow | CPU inference. Use a hosted model provider in `cluster/kagent-values.yaml`. |
+| Port 8080 is already in use | `UI_PORT=8090 ./scripts/ui.sh` |
+| A model download crawls | `ollama pull` inside a kind pod can be very slow. `scripts/ollama-model.sh <model>` downloads on the host and streams the model into the pod; `up.sh` and `dotties.sh` already use it. |
+| A dottie fails with `preload memory search failed` | The database has no pgvector. Re-run `scripts/03-kagent.sh`; on a cluster created before this change also run `kubectl -n kagent exec -i deploy/kagent-postgresql -c postgresql -- psql -U postgres -d kagent < cluster/postgres-pgvector/init-pgvector.sql`. |
+| A scheduled dottie run fails with `memory requires caller identity` | kagent 1.0.0 cannot run schedules for an agent with long-term memory. See [docs/mini-dotties.md](docs/mini-dotties.md). |

@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mini dotties</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><circle cx='16' cy='16' r='12' fill='%237c5cff'/></svg>">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<div id="app">
+  <aside id="side">
+    <div class="brand">
+      <span class="logo"></span>
+      <div><b>dotties</b><small>agents on kagent + Substrate</small></div>
+    </div>
+    <nav id="dottie-list"></nav>
+    <button id="new-dottie" class="btn ghost wide">+ New dottie</button>
+    <p class="foot">Every dottie is a kagent <code>Agent</code>. Nothing is stored outside the cluster.</p>
+  </aside>
+
+  <main id="main">
+    <section id="empty" class="empty">
+      <div class="logo big"></div>
+      <h1>No dottie selected</h1>
+      <p>Pick a dottie on the left, or create one. It sleeps until you write to it.</p>
+    </section>
+
+    <section id="dottie" hidden>
+      <header id="head">
+        <div class="avatar lg" id="h-avatar"></div>
+        <div class="h-text">
+          <h1 id="h-name"></h1>
+          <p id="h-role"></p>
+        </div>
+        <span id="h-state" class="pill"></span>
+        <div class="tabs" role="tablist">
+          <button data-tab="chat" class="on">Chat</button>
+          <button data-tab="schedules">Schedules</button>
+          <button data-tab="about">About</button>
+        </div>
+      </header>
+
+      <div id="tab-chat" class="tab">
+        <div id="convs">
+          <button id="new-conv" class="btn ghost wide">+ New conversation</button>
+          <div id="conv-list"></div>
+        </div>
+        <div id="chat">
+          <div id="messages"></div>
+          <form id="composer">
+            <textarea id="input" rows="1" placeholder="Write to wake it…"></textarea>
+            <button class="btn primary" id="send">Send</button>
+          </form>
+        </div>
+      </div>
+
+      <div id="tab-schedules" class="tab pad" hidden>
+        <h2>Schedules</h2>
+        <p class="muted">These are kagent scheduled runs: kagent stores them and fires them itself, so they keep running when this page is closed, and they also appear under Schedules in the kagent UI. Each run wakes the dottie in a conversation of its own.</p>
+        <p id="sched-blocked" class="card" hidden style="padding:14px 16px">This dottie has long-term memory, and kagent 1.0.0 cannot run schedules for it: a scheduled run reaches the agent without a caller identity, which memory requires. Create a dottie without memory to schedule it.</p>
+        <div id="sched-list"></div>
+        <form id="sched-form" class="card">
+          <h3>Add a schedule</h3>
+          <div class="row">
+            <label>When
+              <select id="sched-preset">
+                <option value="*/2 * * * *">Every 2 minutes (demo)</option>
+                <option value="0 * * * *">Every hour</option>
+                <option value="0 8 * * *" selected>Every day at 08:00</option>
+                <option value="0 8 * * 1">Every Monday at 08:00</option>
+                <option value="">Custom cron…</option>
+              </select>
+            </label>
+            <label id="sched-cron-wrap" hidden>Cron
+              <input id="sched-cron" placeholder="minute hour day month weekday">
+            </label>
+          </div>
+          <label>What to do
+            <textarea id="sched-prompt" rows="2" placeholder="Give me a one-line briefing on the weather in Ghent."></textarea>
+          </label>
+          <button class="btn primary">Add schedule</button>
+        </form>
+      </div>
+
+      <div id="tab-about" class="tab pad" hidden>
+        <h2>About</h2>
+        <dl id="about"></dl>
+        <h3>What kagent sees</h3>
+        <p class="muted">This is the whole dottie: one <code>Agent</code> in the cluster. The page and its server add nothing kagent does not already store.</p>
+        <pre id="manifest"></pre>
+        <button id="delete" class="btn danger">Delete this dottie</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<dialog id="dlg">
+  <form id="dlg-form" method="dialog">
+    <h2>New dottie</h2>
+    <div class="row">
+      <label class="emoji">Face<input id="f-emoji" maxlength="4" value="🟣"></label>
+      <label class="grow">Name<input id="f-name" placeholder="scout" required pattern="[a-z][a-z0-9-]{1,30}" title="lowercase letters, digits and dashes"></label>
+    </div>
+    <label>Role <span class="muted">(one line)</span><input id="f-role" placeholder="Looks things up and reports back"></label>
+    <label>Personality<textarea id="f-personality" rows="4" required placeholder="You are curious and precise. You look things up before you answer and say where you found them."></textarea></label>
+    <label>Model<select id="f-model"></select></label>
+    <fieldset>
+      <legend>What it can do</legend>
+      <div id="f-toolkits"></div>
+      <label class="check"><input type="checkbox" id="f-approval"> <span><b>Ask me first</b><small>kagent pauses before a messaging or Kubernetes tool call until you approve it</small></span></label>
+      <label class="check"><input type="checkbox" id="f-memory" checked> <span><b>Long-term memory</b><small>remembers across conversations; kagent 1.0.0 cannot run schedules for a dottie with memory</small></span></label>
+      <p class="muted small">Every dottie also gets a shell in its own gVisor sandbox.</p>
+    </fieldset>
+    <p id="dlg-error" class="error" hidden></p>
+    <div class="actions">
+      <button type="button" class="btn ghost" id="dlg-cancel">Cancel</button>
+      <button class="btn primary" id="dlg-create">Create</button>
+    </div>
+  </form>
+</dialog>
+<script src="/static/app.js"></script>
+</body>
+</html>

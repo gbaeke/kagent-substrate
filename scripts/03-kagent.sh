@@ -11,9 +11,14 @@ source "$(dirname "$0")/env.sh"
 export KUBECONFIG="$POC_DIR/bin/kubeconfig"
 kind get kubeconfig --name "$KIND_CLUSTER" > "$KUBECONFIG"
 
+# kagent's long-term memory needs pgvector, which the default dev PostgreSQL image lacks.
+docker build -q -t "$POSTGRES_IMAGE" "$POC_DIR/cluster/postgres-pgvector"
+kind load docker-image "$POSTGRES_IMAGE" --name "$KIND_CLUSTER"
+
 cat > "$POC_DIR/bin/kagent-cli.yaml" <<EOF
 install:
   defaultModelProvider: Ollama
+  bundledPostgresImage: "$POSTGRES_IMAGE"
   kagent:
     version: "$KAGENT_VERSION"
     valuesFiles: ["$POC_DIR/cluster/kagent-values.yaml"]

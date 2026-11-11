@@ -1,0 +1,15 @@
+# Optional: run dotties on Claude instead of the local Ollama model. Needs the key in a Secret first:
+#   read -rs ANTHROPIC_API_KEY
+#   kubectl -n kagent create secret generic kagent-anthropic --from-literal=ANTHROPIC_API_KEY="$ANTHROPIC_API_KEY"
+# scripts/dotties.sh applies this file when that Secret exists. The key never enters a dottie's
+# sandbox: Substrate's egress gateway adds it to calls to api.anthropic.com.
+apiVersion: api.kagent.dev/v1alpha3
+kind: ModelConfig
+metadata:
+  name: claude-haiku
+  namespace: kagent
+spec:
+  provider: Anthropic
+  model: claude-haiku-5-5
+  apiKeySecret: kagent-anthropic
+  apiKeySecretKey: ANTHROPIC_API_KEY

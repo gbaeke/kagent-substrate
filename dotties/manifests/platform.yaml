@@ -1,0 +1,60 @@
+# What every mini dottie shares: an embedding model for memory, a Harness with
+# long-term memory switched on, and an egress policy for dotties that may use the web.
+apiVersion: api.kagent.dev/v1alpha3
+kind: ModelConfig
+metadata:
+  name: dottie-embeddings
+  namespace: kagent
+spec:
+  provider: Ollama
+  model: nomic-embed-text            # 768 dimensions, the size kagent memory stores
+  ollama:
+    host: http://ollama.ollama.svc.cluster.local:11434
+---
+# The dottie Harness: kagent's Go ADK runtime (built-in bash and file tools on /data/workspace)
+# plus long-term memory. With memory on, a dottie gets save_memory and recalls across conversations.
+apiVersion: api.kagent.dev/v1alpha3
+kind: Harness
+metadata:
+  name: dottie
+  namespace: kagent
+spec:
+  kagent:
+    memory:
+      modelConfigRef:
+        name: dottie-embeddings
+      ttlDays: 30
+  substrate:
+    workerPoolRef:
+      name: kagent-default
+    snapshotPolicy:
+      location: gs://ate-snapshots/kagent/
+---
+# The same runtime without memory. kagent 1.0.0 cannot run a schedule for an agent whose Harness
+# has memory on: a scheduled run carries no caller identity, and memory refuses to work without one
+# ("memory requires caller identity"). Dotties created without memory use this Harness.
+apiVersion: api.kagent.dev/v1alpha3
+kind: Harness
+metadata:
+  name: dottie-plain
+  namespace: kagent
+spec:
+  kagent: {}
+  substrate:
+    workerPoolRef:
+      name: kagent-default
+    snapshotPolicy:
+      location: gs://ate-snapshots/kagent/
+---
+# Substrate denies all outbound traffic by default. Dotties created with "web" reference this
+# policy, which lets their shell (curl, python) reach these origins and nothing else.
+apiVersion: api.kagent.dev/v1alpha3
+kind: EgressPolicy
+metadata:
+  name: dottie-web
+  namespace: kagent
+spec:
+  destinations:
+  - origin: https://en.wikipedia.org
+  - origin: https://api.github.com
+  - origin: https://wttr.in

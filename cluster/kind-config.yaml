@@ -1,5 +1,5 @@
 # kind cluster for the kagent + Agent Substrate PoC.
-# Derived from kagent's own CI config (kagent-dev/kagent scripts/kind/kind-config.yaml @ v1.0.0-rc3; unchanged since alpha5).
+# Derived from kagent's own CI config (kagent-dev/kagent scripts/kind/kind-config.yaml @ v1.0.0; unchanged since alpha5).
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 # name comes from $KIND_CLUSTER (scripts/env.sh), default kagent-poc

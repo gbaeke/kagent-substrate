@@ -1,7 +1,7 @@
-# kagent 1.0.0-rc3 values for the local PoC (kind + Agent Substrate 1.0.0 + in-cluster Ollama).
+# kagent 1.0.0 values for the local PoC (kind + Agent Substrate 1.0.0 + in-cluster Ollama).
 # Passed to the kagent chart by `kagent install` (scripts/03-kagent.sh). The CLI itself sets
 # providers.default, the worker image (ateworker-gvisor:v<substrate>) and substrateWorkerPool.create.
-# Full chart defaults: ref/kagent-values-1.0.0-rc3.yaml
+# Full chart defaults: ref/kagent-values-1.0.0.yaml
 providers:
   ollama:
     provider: Ollama
@@ -17,3 +17,9 @@ substrateWorkerPool:
   name: kagent-default
   replicas: 2
   sandboxClass: gvisor
+
+# Long-term memory (Harness spec.kagent.memory) stores embeddings in pgvector.
+# Needs a PostgreSQL image that ships the extension: cluster/postgres-pgvector.
+config:
+  database:
+    vectorEnabled: true
